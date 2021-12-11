@@ -6,12 +6,47 @@ using FFXIVTataruHelper.ViewModel;
 using FFXIVTataruHelper.WinUtils;
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+
+static class ClipboardHelper
+{
+    // from https://stackoverflow.com/questions/39832057/using-windows-clipboard
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern IntPtr GetOpenClipboardWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    static extern bool OpenClipboard(IntPtr hWndNewOwner);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    static extern bool CloseClipboard();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    static extern bool ChangeClipboardChain(IntPtr hWndRemove, IntPtr hWndNewNext);
+
+    public static bool SetText(string text)
+    {
+        IntPtr hWnd = GetOpenClipboardWindow(); // Gets the HWND of the window that currently owns the clipboard
+
+        if (hWnd == null)   // If no window currently owns the clipboard, just go ahead and set the text.
+        {
+            System.Windows.Forms.Clipboard.SetText(text);
+        }
+        else
+        {
+            OpenClipboard(IntPtr.Zero);
+            CloseClipboard();
+            System.Windows.Forms.Clipboard.SetText(text);
+        }
+        return true;
+    }
+}
 
 namespace FFXIVTataruHelper
 {
@@ -138,6 +173,29 @@ namespace FFXIVTataruHelper
                 return;
             if (!chatCode.IsChecked)
                 return;
+
+            try
+            {
+                Exception threadEx = null;
+                Thread staThread = new Thread(
+                    delegate ()
+                    {
+                        try
+                        {
+                            ClipboardHelper.SetText(ea.ChatMessage.Text);
+                        }
+
+                        catch (Exception ex)
+                        {
+                            threadEx = ex;
+                        }
+                    });
+                staThread.SetApartmentState(ApartmentState.STA);
+                staThread.Start();
+            }
+            catch (Exception exception)
+            {
+            }
 
             textColor = chatCode.Color;
 
